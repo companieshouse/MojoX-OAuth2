@@ -4,6 +4,7 @@ use Mojo::Base 'Mojo::EventEmitter';
 use Mojo::UserAgent;
 
 has 'operations' => sub { [] };
+has 'error';
 has 'code';
 has 'state';
 
@@ -28,6 +29,8 @@ sub on {
 sub provider {
     my ($self, $provider) = @_;
 
+    die "Unknown provider '$provider' requested" unless exists $self->identity_providers->{$provider};
+
     # Set IDP config hash as provider
     $self->_provider( $self->identity_providers->{$provider} );
 
@@ -40,13 +43,13 @@ sub get_authorization_url
 {
     my ($self, %args) = @_;
 
-    my $redirect_url  = $args{redirect_url}  // $self->_provider->{redirect_url};
+    my $redirect_uri  = $args{redirect_uri}  // $self->_provider->{redirect_uri};
     my $response_type = $args{response_type} // 'code';
     my $scope         = $args{scope}         // $self->_provider->{scope} // '';
     my $client_id     = $self->_provider->{client_id};
     my $auth_url      = $self->_provider->{authorize_url};
 
-    delete $args{redirect_url};
+    delete $args{redirect_uri};
     delete $args{response_type};
     delete $args{scope};
 
@@ -55,7 +58,7 @@ sub get_authorization_url
 
     # Mandatory parameters
     $url->query->append( client_id     => $client_id     );
-    $url->query->append( redirect_url  => $redirect_url  );
+    $url->query->append( redirect_uri  => $redirect_uri  );
     $url->query->append( response_type => $response_type );
 
     # Optional parameters
@@ -77,18 +80,19 @@ sub execute {
 
     die("No operation") unless @{$self->operations};
 
-    
-    while( !$self->error && @{$self->operations} )
+    while( @{$self->operations} )
     {
-        shift->();
+        shift( @{$self->operations} )->();
     }
 }
 
 
 #-------------------------------------------------------------------------------
 # Params passed back from OAuth2 server will be x-form-url-encoded
+# (usually as part of the query string but could be a post)
+# so parameters need to be extracted into a hash by the caller.
 #
-sub recieve_code {
+sub receive_code {
     my ($self, $params) = @_;
 
     push @{$self->operations}, sub
@@ -103,7 +107,7 @@ sub recieve_code {
             return $self->emit_safe('access_denied' => $errors ) 
                     if $errors && $errors->{error} eq 'access_denied' && $self->has_subscribers('access_denied');
             return $self->emit_safe('failure' => $errors) if $errors;
-            return $self->emit_safe('success' => $self->result );
+            return $self->emit_safe('success' => $self->code );
         }
     };
 
@@ -116,7 +120,6 @@ sub get_token {
     my ($self, %args) = @_;
 
     push @{$self->operations}, sub {
-        my $ua = Mojo::UserAgent->new;
 
         my $params;
         my $grant_type = $args{grant_type} || 'authorization_code';
@@ -125,44 +128,80 @@ sub get_token {
         if( $grant_type eq 'authorization_code' )
         {
             $params = {
+                grant_type    => $grant_type,
                 code          => $args{code} // $self->code,
                 client_id     => $self->_provider->{client_id},
                 client_secret => $self->_provider->{client_secret},
-                redirect_url  => $self->_provider->{redirect_url},
-                grant_type    => $grant_type
+                redirect_uri  => $self->_provider->{redirect_uri},
             };
         }
 
-        if( $assertion )
+        if( $grant_type =~ /^[urn|http]/ )
         {
             $params = {
+                grant_type => $grant_type,
                 assertion  => $assertion,
-                grant_type => $grant_type
                 # 'urn:ietf:params:oauth:grant-type:jwt-bearer'
             };
         }
 
-
         die "unsupported grant_type '$grant_type'" unless $params;
 
-        $ua->on( error => sub {
-            my( $ua, $err ) = @_;
-            # TODO make $err consistent with all other data passed to failure callback
-            return $self->emit_safe('failure' => $err );
-        } );
+        my $token_url = $self->_provider->{token_url};
 
-        $ua->post( $self->_provider->{token_url}, form => $params => sub {
-            my ($client, $tx) = @_;
-                if( my $res = $tx->success ) { return $self->emit_safe('success' => $res->json ) };
+        die "Missing token_url in identity provider configuration" unless $token_url;
 
-                my $errors = $self->_extract_errors( $tx->error ); # FIXME  what  does $tx->error look like??
+        my $ua = Mojo::UserAgent->new;
+        $self->_post( $ua, $token_url, $params, sub {
+            my( $success, $error ) = @_;
 
-                return $self->emit_safe('failure' => $errors );
-            }
-        );
+            $ua = $ua; # XXX ua goes out of scope, so need to do this
+
+            return $self->emit_safe('success' => $success ) if $success;
+            return $self->emit_safe('failure' => $error );
+        });
     };
 
     return $self;
+}
+
+#-------------------------------------------------------------------------------
+
+sub _post
+{
+    my( $self, $ua, $url, $params, $cb ) = @_;
+
+    $ua->post( $url, form => $params => sub {
+        my ($client, $tx) = @_;
+
+        my $success_json = $tx->success->json if $tx->success;
+        my $error;
+
+        if( $tx->error )
+        {
+            my ( $error_desc, $error_uri );
+            my ( $error_text, $status_code ) = $tx->error;
+
+            if( $status_code ) {
+                # Errors are returned as a JSON doc from OAuth2 POST methods
+                $error_text = $tx->res->json('/error');
+                $error_desc = $tx->res->json('/error_description');
+                $error_uri  = $tx->res->json('/error_uri');
+            } else {
+                $error_text = 'connection_error';
+            }
+
+            my $error_hash = {
+                error             => $error_text,
+                error_description => $error_desc,
+                error_uri         => $error_uri, 
+                status            => $status_code,
+            };
+            $error = $self->_extract_errors( $error_hash );
+        }
+
+        $cb->( $success_json, $error );
+    });
 }
 
 #-------------------------------------------------------------------------------
@@ -172,17 +211,17 @@ sub _extract_errors
     my ($self, $response) = @_;
 
     my %errors;
-    if( $response->{error} )
+    if( ref($response) eq 'HASH' && $response->{error} )
     {
         $errors{error}             = $response->{error};
         $errors{error_description} = $response->{error_description} if $response->{error_description};
         $errors{error_uri}         = $response->{error_uri}         if $response->{error_uri};
-        #  FIXME Add status code for other types of failure
+        $errors{status}            = $response->{status}            if $response->{status};
+
+        $self->error( \%errors );
+        return \%errors;
     }
-
-    $self->error( \%errors );
-
-    return \%errors;
+    return undef;
 }
 
 #-------------------------------------------------------------------------------
