@@ -174,44 +174,47 @@ sub _post
     $ua->post( $url, form => $params => sub {
         my ($client, $tx) = @_;
 
-        my $success_json = $tx->success->json if $tx->success;
-        my $error;
+        my $error_hash;
 
         if( $tx->error )
         {
-            my ( $error_desc, $error_uri );
             my ( $error_text, $status_code ) = $tx->error;
 
             if( $status_code ) {
-                # Errors are returned as a JSON doc from OAuth2 POST methods
-                $error_text = $tx->res->json('/error');
-                $error_desc = $tx->res->json('/error_description');
-                $error_uri  = $tx->res->json('/error_uri');
-            } else {
-                $error_text = 'connection_error';
-            }
+                # Errors are returned as a JSON doc from OAuth2 POST methods.
+                # If there was a resource error (404, 500) at the server, then
+                # no JSON will be returned, so use the HTTP Status and desc
+                # as the error.
+                $error_hash = $tx->res->json || { error => $error_text };
+                $error_hash->{status} = $status_code;
 
-            my $error_hash = {
-                error             => $error_text,
-                error_description => $error_desc,
-                error_uri         => $error_uri, 
-                status            => $status_code,
-            };
-            $error = $self->_extract_errors( $error_hash );
+            } else {
+                # General client errors
+                $error_hash = { error             => 'connection_error',
+                                error_description => $error_text };
+            }
+            
         }
 
-        $cb->( $success_json, $error );
+        my $error_json   = $self->_extract_errors( $error_hash );
+        my $success_json = $tx->success->json if $tx->success;
+
+        $cb->( $success_json, $error_json );
     });
 }
 
 #-------------------------------------------------------------------------------
-
+# Extract errors from response hash. This would either be code built hash, or
+# hash of query parameters.
+# It also makes sure that only valid error attributes are returned in the
+# error block.
+#
 sub _extract_errors
 {
     my ($self, $response) = @_;
 
     my %errors;
-    if( ref($response) eq 'HASH' && $response->{error} )
+    if( $response && (ref($response) eq 'HASH') && $response->{error} )
     {
         $errors{error}             = $response->{error};
         $errors{error_description} = $response->{error_description} if $response->{error_description};
