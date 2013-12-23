@@ -106,7 +106,7 @@ sub receive_code {
         if( not @{$self->operations} ) {
             return $self->emit_safe('access_denied' => $errors ) 
                     if $errors && $errors->{error} eq 'access_denied' && $self->has_subscribers('access_denied');
-            return $self->emit_safe('failure' => $errors) if $errors;
+            return $self->emit_safe('failure' => $errors) if( $errors || not $self->{code} );
             return $self->emit_safe('success' => $self->code );
         }
     };
