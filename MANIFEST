@@ -1,0 +1,6 @@
+lib/MojoX/OAuth2.pm
+lib/MojoX/OAuth2/Client.pm
+t/client_server.t
+README.pod
+Makefile.PL
+MANIFEST
