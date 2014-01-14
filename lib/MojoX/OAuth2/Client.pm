@@ -8,7 +8,6 @@ has 'error';
 has 'code';
 has 'state';
 
-
 has 'identity_providers';
 has '_provider';
 
@@ -31,10 +30,12 @@ sub provider {
 
     die "Unknown provider '$provider' requested" unless exists $self->identity_providers->{$provider};
 
-    # Set IDP config hash as provider
-    $self->_provider( $self->identity_providers->{$provider} );
+    $self->_provider($self->identity_providers->{$provider});
 
-    return $self;
+    return $self->new(
+        identity_providers => $self->identity_providers,
+        _provider => $self->identity_providers->{$provider},
+    );
 }
 
 #-------------------------------------------------------------------------------
