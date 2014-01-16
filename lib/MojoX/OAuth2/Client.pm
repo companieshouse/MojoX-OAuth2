@@ -99,6 +99,7 @@ sub receive_code {
     push @{$self->operations}, sub
     {
         my $errors = $self->_extract_errors( $params );
+        $self->error( $errors );
 
         $self->code ( $params->{code} );
         $self->state( $params->{state} ) if $params->{state};
@@ -121,6 +122,9 @@ sub get_token {
     my ($self, %args) = @_;
 
     push @{$self->operations}, sub {
+
+        # Deal with error that may have hung over from receive_code operation
+        return $self->emit_safe('failure' => $self->error ) if $self->error;
 
         my $params;
         my $grant_type = $args{grant_type} || 'authorization_code';
@@ -218,6 +222,7 @@ sub _extract_errors
     if( $response && (ref($response) eq 'HASH') && $response->{error} )
     {
         $errors{error}             = $response->{error};
+        $errors{error_description} = "Server error" if $response->{error} eq 'server_error';
         $errors{error_description} = $response->{error_description} if $response->{error_description};
         $errors{error_uri}         = $response->{error_uri}         if $response->{error_uri};
         $errors{status}            = $response->{status}            if $response->{status};
