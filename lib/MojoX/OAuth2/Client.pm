@@ -333,7 +333,7 @@ Overrides the redirect_uri given in the identity provider configuration.
 
 =item * response_type
 
-Defaults to 'code'.
+Defaults to C<code>.
 
 =item * scope
 
@@ -348,7 +348,7 @@ Takes a hash (ref) of parameters, usually received from the HTTP callback reques
 The execution of the code receipt is deferred until the L</execute> method is called which requires that three callback subroutines are provided through the L</on> method,
 one of which will be invoked to handle the result of the code receipt.
 
-Alternatively, the 'code' property of the client may be set directly, allowing other methods of receipt.
+Alternatively, the C<code> property of the client may be set directly, allowing other methods of receipt.
 
 =head2 get_token
 
@@ -386,7 +386,7 @@ The error document can contain:
 
 =item * error
 
-The error that was returned, such as access_denied.
+The error that was returned, such as C<access_denied>.
 
 =item * error_description
 
