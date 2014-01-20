@@ -398,7 +398,7 @@ The HTTP status code returned.
 
 =item * error_url
 
-An optional URL giving further details or a comlete description of the error.
+An optional URL giving further details or a complete description of the error.
 
 =back
 
@@ -410,7 +410,7 @@ This subroutine is called if a user authorisation failsis denied or cancelled by
         my ( $client, $error ) = @_;
     }
 
-The error document has the same content as described by the L</error> callback above.
+The error document has the same content as described by the L</access_denied> callback above.
 
 =item execute
 
