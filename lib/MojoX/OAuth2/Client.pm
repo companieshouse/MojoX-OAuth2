@@ -345,7 +345,7 @@ and failed/denied authorisations.
 =head2 receive_code
 
 Takes a hash (ref) of parameters, usually received from the HTTP callback request made by the OAuth2 server, from which it extracts the authorisation code parameter. The parameter value is used by subsequent access_token requests.
-The execution of the code receipt is deferred until the L<execute> method is called which requires that three callback subroutines are provided through the L<on> method,
+The execution of the code receipt is deferred until the L</execute> method is called which requires that three callback subroutines are provided through the L</on> method,
 one of which will be invoked to handle the result of the code receipt.
 
 Alternatively, the 'code' property of the client may be set directly, allowing other methods of receipt.
@@ -353,13 +353,13 @@ Alternatively, the 'code' property of the client may be set directly, allowing o
 =head2 get_token
 
 This method puts the client in "request access token" mode. 
-The token request is deferred until the L<execute> method is called which requires that three callback subroutines are provided through the L<on> method.
-When L<execute> is invoked, the identity provider OAuth2 server is contacted and the authorisation code to access token exchange is requested, 
+The token request is deferred until the L</execute> method is called which requires that three callback subroutines are provided through the L</on> method.
+When L</execute> is invoked, the identity provider OAuth2 server is contacted and the authorisation code to access token exchange is requested, 
 resulting in one of the callback subroutines being called.
 
 =head2 on
 
-Register three callback subroutines with the client, one of which will receive the response of the receive_code or get_token method call, once L<execute> is invoked.
+Register three callback subroutines with the client, one of which will receive the response of the receive_code or get_token method call, once L</execute> is invoked.
 The named subroutines are:
 
 =over 4
@@ -410,7 +410,7 @@ This subroutine is called if a user authorisation failsis denied or cancelled by
         my ( $client, $error ) = @_;
     }
 
-The error document has the same content as described by the L<error> callback above.
+The error document has the same content as described by the L</error> callback above.
 
 =item execute
 
