@@ -1,1 +1,1 @@
-lib/MojoX/OAuth2.pm
+lib/MojoX/OAuth2/Client.pm
