@@ -3,6 +3,7 @@ package MojoX::OAuth2::Client;
 use Mojo::Base 'Mojo::EventEmitter';
 use Mojo::UserAgent;
 use MIME::Base64 qw(encode_base64);
+use Data::Dumper;
 
 has 'operations' => sub { [] };
 has 'error';
@@ -130,7 +131,6 @@ sub get_token {
     my ($self, %args) = @_;
 
     push @{$self->operations}, sub {
-
         # Deal with error that may have hung over from receive_code operation
         return $self->emit_safe('failure' => $self->error ) if $self->error;
 
@@ -255,12 +255,13 @@ sub _extract_errors
     # OAuth 2.0 specification rfc6749 and doing their own thing. Thanks payap!
     #
     my %errors;
-    if( $response && (ref($response) eq 'HASH') )
+    if( $response && (ref($response) eq 'HASH') && ($response->{error} || $response->{name}) )
     {
-        $errors{error}             = $response->{error} || $response->{name};
-        $errors{error_description} = "Server error" if $response->{error} eq 'server_error';
-        $errors{error_description} = $response->{message} if $response->{message};
+        my $response_error = $response->{error} || $response->{name};
+        $errors{error}             = $response_error;
+        $errors{error_description} = $response->{message}           if $response->{message};
         $errors{error_description} = $response->{error_description} if $response->{error_description};
+        $errors{error_description} = "Server error"                 if $response_error && ($response_error eq 'server_error');
         $errors{error_uri}         = $response->{error_uri}         if $response->{error_uri};
         $errors{status}            = $response->{status}            if $response->{status};
 
@@ -345,11 +346,16 @@ Configure OAuth2 client with the supported identity providers. The configuration
             client_id     => 'The id allocated to the client by OAuth2 server when it was registered',
             client_secret => 'The id allocated to the client by OAuth2 server when it was registered',
             authorize_url => 'The OAuth2 servers authorisation request URL',
-            token_url     => 'The OAuth2 servers token request URL'
+            token_url     => 'The OAuth2 servers token request URL',
+            profile_url   => 'The OAuth2 server user info/profile request URL'
+            use_basic_auth=> 'yes|no|true|false|1|0'
         },
         identity_provider_two   => { },
         identity_provider_three => { },
     }
+
+    use_basic_auth tells the client to send client_id and client_secret using HTTP Basic authorisation, which may
+    be required by some OAuth2 server implementations, notably PayPal.
 
 =head2 provider
 
