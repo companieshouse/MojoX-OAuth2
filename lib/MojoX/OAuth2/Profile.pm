@@ -1,13 +1,9 @@
-package MojoX::OAuth2::Client;
+package MojoX::OAuth2::Profile;
 
 use Mojo::Base 'Mojo::EventEmitter';
 use Mojo::UserAgent;
-use MIME::Base64 qw(encode_base64);
 
 has 'operations' => sub { [] };
-has 'error';
-has 'code';
-has 'state';
 
 has 'identity_providers';
 has '_provider';
@@ -48,42 +44,6 @@ sub provider {
 
 #-------------------------------------------------------------------------------
 
-sub get_authorization_url
-{
-    my ($self, %args) = @_;
-
-    my $redirect_uri  = $args{redirect_uri}  // $self->_provider->{redirect_uri};
-    my $response_type = $args{response_type} // 'code';
-    my $scope         = $args{scope}         // $self->_provider->{scope} // '';
-    my $client_id     = $self->_provider->{client_id};
-    my $auth_url      = $self->_provider->{authorize_url};
-
-    delete $args{redirect_uri};
-    delete $args{response_type};
-    delete $args{scope};
-
-    # authorisation request is a GET
-    my $url = Mojo::URL->new( $auth_url );
-
-    # Mandatory parameters
-    $url->query->append( client_id     => $client_id     );
-    $url->query->append( redirect_uri  => $redirect_uri  );
-    $url->query->append( response_type => $response_type );
-
-    # Optional parameters
-    $url->query->append( scope => $scope         ) if $scope;
-
-    # Append any further args that may have been passed in, including state.
-    foreach my $opt_arg (keys %args)
-    {
-        $url->query->append( $opt_arg => $args{$opt_arg} );
-    }
-
-    return $url;
-}
-
-#-------------------------------------------------------------------------------
-
 sub execute {
     my ($self) = @_;
 
@@ -95,179 +55,42 @@ sub execute {
     }
 }
 
-
-#-------------------------------------------------------------------------------
-# Params passed back from OAuth2 server will be x-form-url-encoded
-# (usually as part of the query string but could be a post)
-# so parameters need to be extracted into a hash by the caller.
-#
-sub receive_code {
-    my ($self, $params) = @_;
-
-    push @{$self->operations}, sub
-    {
-        my $errors = $self->_extract_errors( $params );
-        $self->error( $errors );
-
-        $self->code ( $params->{code} );
-        $self->state( $params->{state} ) if $params->{state};
-
-        # If we are not chaining to a get_token operation, deal with callbacks here.
-        if( not @{$self->operations} ) {
-            return $self->emit_safe('access_denied' => $errors ) 
-                    if $errors && $errors->{error} eq 'access_denied' && $self->has_subscribers('access_denied');
-            return $self->emit_safe('failure' => $errors) if( $errors || not $self->{code} );
-            return $self->emit_safe('success' => $self->code );
-        }
-    };
-
-    return $self;
-}
-
 #-------------------------------------------------------------------------------
 
-sub get_token {
+sub fetch {
     my ($self, %args) = @_;
 
     push @{$self->operations}, sub {
 
-        # Deal with error that may have hung over from receive_code operation
-        return $self->emit_safe('failure' => $self->error ) if $self->error;
 
-        my $params;
-        my $grant_type = $args{grant_type} || 'authorization_code';
-        my $assertion  = $args{assertion};
+        my $profile_url = $self->_provider->{profile_url};
 
-        if( $grant_type eq 'authorization_code' )
-        {
-            $params = {
-                grant_type    => $grant_type,
-                code          => $args{code} // $self->code,
-                redirect_uri  => $self->_provider->{redirect_uri},
-            };
-        }
+        die "Missing profile_url in identity provider configuration" unless $profile_url;
 
-        if( $grant_type =~ /^[urn|http]/ )
-        {
-            $params = {
-                grant_type => $grant_type,
-                assertion  => $assertion,
-                # 'urn:ietf:params:oauth:grant-type:jwt-bearer'
-            };
-        }
-        die "unsupported grant_type '$grant_type'" unless $params;
+        my $ua = Mojo::UserAgent->new;
 
-        my $token_url = $self->_provider->{token_url};
+        my $token = $args{token};
+        my $type  = $args{type} || 'Bearer';
 
-        die "Missing token_url in identity provider configuration" unless $token_url;
+        $ua->on( start => sub {
+            my ($ua, $tx) = @_;
+            $tx->req->headers->header('Authorization' => "$type $token");
+            $tx->req->headers->header('Accept'        => "application/json");
+        } );
 
-        my $basicauth_switch = ($self->_provider->{use_basic_auth} =~ /yes|true|1/i) ? 1 : 0;
+        $ua->get($profile_url => sub {
+            my ($client, $tx) = @_;
 
-        $self->_post( url           => $token_url, 
-                      body          => $params, 
-                      basicauth     => $basicauth_switch, 
-                      client_id     => $self->_provider->{client_id},
-                      client_secret => $self->_provider->{client_secret},
-        sub {
-            my( $success, $error ) = @_;
+            $ua = $ua;
 
-            return $self->emit_safe('failure' => $error )  if $error;
-            return $self->emit_safe('success' => $success );
+            return $self->emit_safe('failure' => $tx->error ) if $tx->error;
+
+            my $profile_json = $tx->success->json if $tx->success;
+            return $self->emit_safe('success' => $profile_json );
         });
     };
 
     return $self;
-}
-
-#-------------------------------------------------------------------------------
-
-sub _post
-{
-    my( $cb, $self, %arg ) = (pop,@_);
-
-    my $url       = $arg{url};
-    my $body      = $arg{body};
-    my $client_id = $arg{client_id};
-    my $secret    = $arg{client_secret};
-    my $basicauth = $arg{basicauth};
-
-    my $auth;
-    if( $basicauth ) {
-        $auth = encode_base64("$client_id:$secret");
-        $auth =~ s/\n//gm;
-    } else {
-        $body->{client_id}     = $client_id;
-        $body->{client_secret} = $secret;
-    }
-
-    my $ua = Mojo::UserAgent->new;
-
-    $ua->on( start => sub {
-        my ($ua, $tx) = @_;
-        $tx->req->headers->header('Content-Type' => "application/x-www-form-urlencoded");
-        $tx->req->headers->header('Accept' => "application/json");
-        $tx->req->headers->header('Authorization' => "Basic $auth") if $auth;
-    });
-
-    $ua->post( $url, form => $body => sub {
-        my ($client, $tx) = @_;
-
-        my $error_hash;
-
-        $ua = $ua;
-        if( $tx->error )
-        {
-            my ( $error_text, $status_code ) = $tx->error;
-
-            if( $status_code ) {
-                # Errors are returned as a JSON doc from OAuth2 POST methods.
-                # If there was a resource error (404, 500) at the server, then
-                # no JSON will be returned, so use the HTTP Status and desc
-                # as the error.
-                $error_hash = $tx->res->json || { error => $error_text };
-                $error_hash->{status} = $status_code;
-
-            } else {
-                # General client errors
-                $error_hash = { error             => 'connection_error',
-                                error_description => $error_text };
-            }
-        }
-
-        my $error_json   = $self->_extract_errors( $error_hash );
-        my $success_json = $tx->error ? undef : $tx->success->json;
-
-        $cb->( $success_json, $error_json );
-    });
-}
-
-#-------------------------------------------------------------------------------
-# Extract errors from response hash. This would either be code built hash, or
-# hash of query parameters.
-# It also makes sure that only valid error attributes are returned in the
-# error block.
-#
-sub _extract_errors
-{
-    my ($self, $response) = @_;
-
-    # Paypal return "name" and "message" in their error JSON, ignoring the
-    # OAuth 2.0 specification rfc6749 and doing their own thing. Thanks payap!
-    #
-    my %errors;
-    if( $response && (ref($response) eq 'HASH') )
-    {
-        $errors{error}             = $response->{error} || $response->{name};
-        $errors{error_description} = "Server error" if $response->{error} eq 'server_error';
-        $errors{error_description} = $response->{message} if $response->{message};
-        $errors{error_description} = $response->{error_description} if $response->{error_description};
-        $errors{error_uri}         = $response->{error_uri}         if $response->{error_uri};
-        $errors{status}            = $response->{status}            if $response->{status};
-
-        $self->error( \%errors );
-        return \%errors;
-    }
-    return undef;
 }
 
 #-------------------------------------------------------------------------------
