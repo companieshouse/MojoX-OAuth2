@@ -2,6 +2,8 @@ package MojoX::OAuth2::Client;
 
 use Mojo::Base 'Mojo::EventEmitter';
 use Mojo::UserAgent;
+use MIME::Base64 qw(encode_base64);
+use Data::Dumper;
 
 has 'operations' => sub { [] };
 has 'error';
@@ -18,6 +20,13 @@ sub on {
 
     for my $event (keys %events) {
         $self->SUPER::on($event => $events{$event});
+    }
+
+    if( ! $self->has_subscribers('error') ) {
+        $self->SUPER::on(error => sub {
+            my ($self, $error) = @_;
+            print "Error $error";
+        });
     }
 
     return $self;
@@ -122,7 +131,6 @@ sub get_token {
     my ($self, %args) = @_;
 
     push @{$self->operations}, sub {
-
         # Deal with error that may have hung over from receive_code operation
         return $self->emit_safe('failure' => $self->error ) if $self->error;
 
@@ -135,8 +143,6 @@ sub get_token {
             $params = {
                 grant_type    => $grant_type,
                 code          => $args{code} // $self->code,
-                client_id     => $self->_provider->{client_id},
-                client_secret => $self->_provider->{client_secret},
                 redirect_uri  => $self->_provider->{redirect_uri},
             };
         }
@@ -149,21 +155,24 @@ sub get_token {
                 # 'urn:ietf:params:oauth:grant-type:jwt-bearer'
             };
         }
-
         die "unsupported grant_type '$grant_type'" unless $params;
 
         my $token_url = $self->_provider->{token_url};
 
         die "Missing token_url in identity provider configuration" unless $token_url;
 
-        my $ua = Mojo::UserAgent->new;
-        $self->_post( $ua, $token_url, $params, sub {
+        my $basicauth_switch = ($self->_provider->{use_basic_auth} =~ /yes|true|1/i) ? 1 : 0;
+
+        $self->_post( url           => $token_url, 
+                      body          => $params, 
+                      basicauth     => $basicauth_switch, 
+                      client_id     => $self->_provider->{client_id},
+                      client_secret => $self->_provider->{client_secret},
+        sub {
             my( $success, $error ) = @_;
 
-            $ua = $ua; # XXX ua goes out of scope, so need to do this
-
-            return $self->emit_safe('success' => $success ) if $success;
-            return $self->emit_safe('failure' => $error );
+            return $self->emit_safe('failure' => $error )  if $error;
+            return $self->emit_safe('success' => $success );
         });
     };
 
@@ -174,13 +183,38 @@ sub get_token {
 
 sub _post
 {
-    my( $self, $ua, $url, $params, $cb ) = @_;
+    my( $cb, $self, %arg ) = (pop,@_);
 
-    $ua->post( $url, form => $params => sub {
+    my $url       = $arg{url};
+    my $body      = $arg{body};
+    my $client_id = $arg{client_id};
+    my $secret    = $arg{client_secret};
+    my $basicauth = $arg{basicauth};
+
+    my $auth;
+    if( $basicauth ) {
+        $auth = encode_base64("$client_id:$secret");
+        $auth =~ s/\n//gm;
+    } else {
+        $body->{client_id}     = $client_id;
+        $body->{client_secret} = $secret;
+    }
+
+    my $ua = Mojo::UserAgent->new;
+
+    $ua->on( start => sub {
+        my ($ua, $tx) = @_;
+        $tx->req->headers->header('Content-Type' => "application/x-www-form-urlencoded");
+        $tx->req->headers->header('Accept' => "application/json");
+        $tx->req->headers->header('Authorization' => "Basic $auth") if $auth;
+    });
+
+    $ua->post( $url, form => $body => sub {
         my ($client, $tx) = @_;
 
         my $error_hash;
 
+        $ua = $ua;
         if( $tx->error )
         {
             my ( $error_text, $status_code ) = $tx->error;
@@ -198,11 +232,10 @@ sub _post
                 $error_hash = { error             => 'connection_error',
                                 error_description => $error_text };
             }
-            
         }
 
         my $error_json   = $self->_extract_errors( $error_hash );
-        my $success_json = $tx->success->json if $tx->success;
+        my $success_json = $tx->error ? undef : $tx->success->json;
 
         $cb->( $success_json, $error_json );
     });
@@ -218,12 +251,17 @@ sub _extract_errors
 {
     my ($self, $response) = @_;
 
+    # Paypal return "name" and "message" in their error JSON, ignoring the
+    # OAuth 2.0 specification rfc6749 and doing their own thing. Thanks payap!
+    #
     my %errors;
-    if( $response && (ref($response) eq 'HASH') && $response->{error} )
+    if( $response && (ref($response) eq 'HASH') && ($response->{error} || $response->{name}) )
     {
-        $errors{error}             = $response->{error};
-        $errors{error_description} = "Server error" if $response->{error} eq 'server_error';
+        my $response_error = $response->{error} || $response->{name};
+        $errors{error}             = $response_error;
+        $errors{error_description} = $response->{message}           if $response->{message};
         $errors{error_description} = $response->{error_description} if $response->{error_description};
+        $errors{error_description} = "Server error"                 if $response_error && ($response_error eq 'server_error');
         $errors{error_uri}         = $response->{error_uri}         if $response->{error_uri};
         $errors{status}            = $response->{status}            if $response->{status};
 
@@ -308,11 +346,16 @@ Configure OAuth2 client with the supported identity providers. The configuration
             client_id     => 'The id allocated to the client by OAuth2 server when it was registered',
             client_secret => 'The id allocated to the client by OAuth2 server when it was registered',
             authorize_url => 'The OAuth2 servers authorisation request URL',
-            token_url     => 'The OAuth2 servers token request URL'
+            token_url     => 'The OAuth2 servers token request URL',
+            profile_url   => 'The OAuth2 server user info/profile request URL'
+            use_basic_auth=> 'yes|no|true|false|1|0'
         },
         identity_provider_two   => { },
         identity_provider_three => { },
     }
+
+    use_basic_auth tells the client to send client_id and client_secret using HTTP Basic authorisation, which may
+    be required by some OAuth2 server implementations, notably PayPal.
 
 =head2 provider
 
