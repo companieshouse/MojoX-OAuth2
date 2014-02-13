@@ -168,6 +168,7 @@ sub get_token {
                       basicauth     => $basicauth_switch, 
                       client_id     => $self->_provider->{client_id},
                       client_secret => $self->_provider->{client_secret},
+                      filter        => $args{filter},
         sub {
             my( $success, $error ) = @_;
 
@@ -190,6 +191,7 @@ sub _post
     my $client_id = $arg{client_id};
     my $secret    = $arg{client_secret};
     my $basicauth = $arg{basicauth};
+    my $filter    = $arg{filter};
 
     my $auth;
     if( $basicauth ) {
@@ -235,7 +237,18 @@ sub _post
         }
 
         my $error_json   = $self->_extract_errors( $error_hash );
-        my $success_json = $tx->error ? undef : $tx->success->json;
+        my $success_json = undef;
+
+        if( !$tx->error ) 
+        {
+            if( $filter )
+            {
+                # Pass Mojo::Message::Response to filter
+                $success_json = $filter->( $tx->success );
+            } else {
+                $success_json = $tx->success->json;
+            }
+        }
 
         $cb->( $success_json, $error_json );
     });
@@ -396,9 +409,30 @@ Alternatively, the C<code> property of the client may be set directly, allowing 
 =head2 get_token
 
 This method puts the client in "request access token" mode. 
-The token request is deferred until the L</execute> method is called which requires that three callback subroutines are provided through the L</on> method.
-When L</execute> is invoked, the identity provider OAuth2 server is contacted and the authorisation code to access token exchange is requested, 
-resulting in one of the callback subroutines being called.
+The token request is deferred until the L</execute> method is called which requires that three callback subroutines are 
+provided through the L</on> method. When L</execute> is invoked, the identity provider OAuth2 server is contacted and the
+authorisation code to access token exchange is requested, resulting in one of the callback subroutines being called.
+
+Optionally takes a L</filter> argument - a sub that takes a Mojo::Message::Response object and returns a hash reference
+containing an OAuth 2.0 complient token response, such that it contains access_token => , expires_in => token_type => elements,
+as required. This is useful for mapping non-complient server responses, such as that from Facebook, into a complient response:
+
+      # A Facebook access_token response filter.
+      # The filter takes a Mojo::Message::Response and returns a proper
+      # OAuth 2.0 access_token response hash.
+      
+      $filter = sub {
+          my ($response) = @_; 
+          
+          my $resp = Mojo::Parameters->new( $response->body );
+          my $token_info = {
+              access_token => $resp->param('access_token'),
+              expires_in   => $resp->param('expires'),
+              token_type   => 'Bearer',
+          }
+          
+          return $token_info;
+      };
 
 =head2 on
 
