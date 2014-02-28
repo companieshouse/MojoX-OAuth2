@@ -3,7 +3,6 @@ package MojoX::OAuth2::Client;
 use Mojo::Base 'Mojo::EventEmitter';
 use Mojo::UserAgent;
 use MIME::Base64 qw(encode_base64);
-use Data::Dumper;
 
 has 'operations' => sub { [] };
 has 'error';
