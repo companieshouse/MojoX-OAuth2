@@ -7,6 +7,7 @@ use MIME::Base64 qw(encode_base64);
 has 'operations' => sub { [] };
 has 'error';
 has 'code';
+has 'refresh_token';
 has 'state';
 
 has 'identity_providers';
@@ -24,7 +25,7 @@ sub on {
     if( ! $self->has_subscribers('error') ) {
         $self->SUPER::on(error => sub {
             my ($self, $error) = @_;
-            print "Error $error";
+            print STDERR "Error $error";
         });
     }
 
@@ -145,8 +146,15 @@ sub get_token {
                 redirect_uri  => $self->_provider->{redirect_uri},
             };
         }
+        if( $grant_type eq 'refresh_token' )
+        {
+            $params = {
+                grant_type    => $grant_type,
+                refresh_token => $args{refresh_token} // $self->refresh_token,
+            };
+        }
 
-        if( $grant_type =~ /^[urn|http]/ )
+        if( $grant_type eq 'urn:ietf:params:oauth:grant-type:jwt-bearer' )
         {
             $params = {
                 grant_type => $grant_type,
