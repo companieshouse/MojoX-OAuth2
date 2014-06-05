@@ -1,7 +1,7 @@
 Revision history for MojoX::OAuth2
 
 {{$NEXT}}
-  - Converted to Dist::Zilla
+  - Implemented refresh token handling and HTTP Authentication
 
 0.01  2014-01-14
   - first release as CPAN module
