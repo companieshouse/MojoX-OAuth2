@@ -2,6 +2,8 @@ Revision history for MojoX::OAuth2
 
 {{$NEXT}}
   - Fixed undef value in pattern match
+
+0.02  01-Jul-2014
   - Implemented refresh token handling and HTTP Authentication
 
 0.01  2014-01-14
