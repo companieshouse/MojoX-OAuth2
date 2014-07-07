@@ -168,7 +168,7 @@ sub get_token {
 
         die "Missing token_url in identity provider configuration" unless $token_url;
 
-        my $basicauth_switch = ($self->_provider->{use_basic_auth} =~ /yes|true|1/i) ? 1 : 0;
+        my $basicauth_switch = ($self->_provider->{use_basic_auth} && $self->_provider->{use_basic_auth} =~ /yes|true|1/i) ? 1 : 0;
 
         $self->_post( url           => $token_url, 
                       body          => $params, 
