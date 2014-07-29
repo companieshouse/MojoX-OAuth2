@@ -1,7 +1,5 @@
 requires 'Mojo::Base';
 requires 'Mojo::UserAgent';
-on 'test' => sub {
-  requires 'Mojolicious::Lite';
-  requires 'Test::Exception';
-  requires 'Test::Mojo';
-};
+test_requires 'Mojolicious::Lite';
+test_requires 'Test::Exception';
+test_requires 'Test::Mojo';
