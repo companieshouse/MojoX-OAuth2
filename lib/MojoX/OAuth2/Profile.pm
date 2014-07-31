@@ -276,4 +276,6 @@ The error document has the same content as described by the L</access_denied> ca
 
 Execute the deferred receive_token, get_token (or both, in sequence) invoking the appropriate callback subroutine to handle the final result.
 
+=back
+
 =cut
