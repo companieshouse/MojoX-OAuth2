@@ -1,6 +1,7 @@
 Revision history for MojoX::OAuth2
 
 {{$NEXT}}
+  - harmonise to CHGOVUK standard
   - Fixed undef value in pattern match
 
 0.02  01-Jul-2014
