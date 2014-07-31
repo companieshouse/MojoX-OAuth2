@@ -420,7 +420,7 @@ The token request is deferred until the L</execute> method is called which requi
 provided through the L</on> method. When L</execute> is invoked, the identity provider OAuth2 server is contacted and the
 authorisation code to access token exchange is requested, resulting in one of the callback subroutines being called.
 
-Optionally takes a L</filter> argument - a sub that takes a Mojo::Message::Response object and returns a hash reference
+Optionally takes a L<filter> argument - a sub that takes a Mojo::Message::Response object and returns a hash reference
 containing an OAuth 2.0 complient token response, such that it contains access_token => , expires_in => token_type => elements,
 as required. This is useful for mapping non-complient server responses, such as that from Facebook, into a complient response:
 
@@ -499,5 +499,7 @@ The error document has the same content as described by the L</access_denied> ca
 =item execute
 
 Execute the deferred receive_token, get_token (or both, in sequence) invoking the appropriate callback subroutine to handle the final result.
+
+=back
 
 =cut
