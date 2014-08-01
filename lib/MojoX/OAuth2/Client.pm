@@ -72,7 +72,7 @@ sub get_authorization_url
     $url->query->append( response_type => $response_type );
 
     # Optional parameters
-    $url->query->append( scope => $scope         ) if $scope;
+    $url->query->append( scope       => $scope       ) if $scope;
 
     # Append any further args that may have been passed in, including state.
     foreach my $opt_arg (keys %args)
@@ -90,10 +90,7 @@ sub execute {
 
     die("No operation") unless @{$self->operations};
 
-    while( @{$self->operations} )
-    {
-        shift( @{$self->operations} )->();
-    }
+    shift( @{$self->operations} )->();
 }
 
 
@@ -113,13 +110,43 @@ sub receive_code {
         $self->code ( $params->{code} );
         $self->state( $params->{state} ) if $params->{state};
 
-        # If we are not chaining to a get_token operation, deal with callbacks here.
-        if( not @{$self->operations} ) {
-            return $self->emit_safe('access_denied' => $errors ) 
-                    if $errors && $errors->{error} eq 'access_denied' && $self->has_subscribers('access_denied');
-            return $self->emit_safe('failure' => $errors) if( $errors || not $self->{code} );
-            return $self->emit_safe('success' => $self->code );
+        return $self->_emit_code_response if not @{$self->operations};
+        shift( @{$self->operations} )->();
+    };
+
+    return $self;
+}
+
+#-------------------------------------------------------------------------------
+
+sub _emit_code_response {
+    my ($self) = @_;
+
+    my $errors = $self->errors;
+    return unless $errors;
+
+    return $self->emit_safe('access_denied' => $errors ) 
+            if $errors && $errors->{error} eq 'access_denied' && $self->has_subscribers('access_denied');
+    return $self->emit_safe('failure' => $errors) if( $errors || not $self->{code} );
+    return $self->emit_safe('success' => $self->code );
+}
+
+#-------------------------------------------------------------------------------
+
+sub verify_state {
+    my ($cb, $self) = (pop,@_);
+
+    push @{$self->operations}, sub
+    {
+        if( ! $cb->( $self->state ) ) {
+            $self->emit_safe('access_denied' => { error => 'forbidden',
+                                                  error_desription => "Forbidden", 
+                                                  status => 403 } ) unless $cb->( $self->state );
+            return;
         }
+
+        return $self->_emit_code_response if not @{$self->operations};
+        shift( @{$self->operations} )->();
     };
 
     return $self;
@@ -412,6 +439,16 @@ The execution of the code receipt is deferred until the L</execute> method is ca
 one of which will be invoked to handle the result of the code receipt.
 
 Alternatively, the C<code> property of the client may be set directly, allowing other methods of receipt.
+
+=head2 verify_state
+
+This method allows verification of the state returned with the code before get_token is called. It is used
+when methods are chained together:
+
+    $client->receive_code( ... )->verify_state( sub { my ($state) = @_; return 1; } )->get_token->on( ... );
+
+the callback passed to verify_state should return true if the state verifies, false (0) otherwise. If false is
+returned, then the client will emit an "access_denied" hook with a 403 - forbidden error.
 
 =head2 get_token
 
