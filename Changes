@@ -1,6 +1,8 @@
 Revision history for MojoX::OAuth2
 
 {{$NEXT}}
+
+0.31
   - update for Mojo 5.x
 
 0.30  2014-07-31
