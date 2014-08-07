@@ -1,6 +1,7 @@
 Revision history for MojoX::OAuth2
 
 {{$NEXT}}
+  - update for Mojo 5.x
 
 0.30  2014-07-31
   - harmonise to CHGOVUK standard
