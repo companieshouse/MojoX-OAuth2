@@ -226,7 +226,7 @@ sub _post
         $ua = $ua;
         if( $tx->error )
         {
-            my ( $error_text, $status_code ) = $tx->error;
+            my ( $error_text, $status_code ) = ($tx->error->{message}, $tx->error->{code});
 
             if( $status_code ) {
                 # Errors are returned as a JSON doc from OAuth2 POST methods.
