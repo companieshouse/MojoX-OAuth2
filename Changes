@@ -1,6 +1,12 @@
 Revision history for MojoX::OAuth2
 
 {{$NEXT}}
+
+0.31  2014-08-07
+  - update for Mojo 5.x
+
+0.30  2014-07-31
+  - harmonise to CHGOVUK standard
   - Fixed undef value in pattern match
   - Add verify_state method
 
