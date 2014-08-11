@@ -122,7 +122,7 @@ sub receive_code {
 sub _emit_code_response {
     my ($self) = @_;
 
-    my $errors = $self->errors;
+    my $errors = $self->error;
     return unless $errors;
 
     return $self->emit_safe('access_denied' => $errors ) 
