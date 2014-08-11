@@ -123,7 +123,6 @@ sub _emit_code_response {
     my ($self) = @_;
 
     my $errors = $self->error;
-    return unless $errors;
 
     return $self->emit_safe('access_denied' => $errors ) 
             if $errors && $errors->{error} eq 'access_denied' && $self->has_subscribers('access_denied');
