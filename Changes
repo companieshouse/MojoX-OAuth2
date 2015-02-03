@@ -1,6 +1,7 @@
 Revision history for MojoX::OAuth2
 
 {{$NEXT}}
+  - emit_safe() deprecated in Mojolicious - use emit() instead
 
 0.33  2014-08-11
   - Added verify_state handler
