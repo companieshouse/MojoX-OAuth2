@@ -1,5 +1,2 @@
-requires 'Mojo::Base';
-requires 'Mojo::UserAgent';
-test_requires 'Mojolicious::Lite';
+requires 'Mojolicious', '< 6.0.0';
 test_requires 'Test::Exception';
-test_requires 'Test::Mojo';
