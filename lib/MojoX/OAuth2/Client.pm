@@ -124,10 +124,10 @@ sub _emit_code_response {
 
     my $errors = $self->error;
 
-    return $self->emit_safe('access_denied' => $errors ) 
+    return $self->emit('access_denied' => $errors ) 
             if $errors && $errors->{error} eq 'access_denied' && $self->has_subscribers('access_denied');
-    return $self->emit_safe('failure' => $errors) if( $errors || not $self->{code} );
-    return $self->emit_safe('success' => $self->code );
+    return $self->emit('failure' => $errors) if( $errors || not $self->{code} );
+    return $self->emit('success' => $self->code );
 }
 
 #-------------------------------------------------------------------------------
@@ -138,7 +138,7 @@ sub verify_state {
     push @{$self->operations}, sub
     {
         if( ! $cb->( $self->state ) ) {
-            $self->emit_safe('access_denied' => { error => 'forbidden',
+            $self->emit('access_denied' => { error => 'forbidden',
                                                   error_desription => "Forbidden", 
                                                   status => 403 } ) unless $cb->( $self->state );
             return;
@@ -158,7 +158,7 @@ sub get_token {
 
     push @{$self->operations}, sub {
         # Deal with error that may have hung over from receive_code operation
-        return $self->emit_safe('failure' => $self->error ) if $self->error;
+        return $self->emit('failure' => $self->error ) if $self->error;
 
         my $params;
         my $grant_type = $args{grant_type} || 'authorization_code';
@@ -205,8 +205,8 @@ sub get_token {
         sub {
             my( $success, $error ) = @_;
 
-            return $self->emit_safe('failure' => $error )  if $error;
-            return $self->emit_safe('success' => $success );
+            return $self->emit('failure' => $error )  if $error;
+            return $self->emit('success' => $success );
         });
     };
 
