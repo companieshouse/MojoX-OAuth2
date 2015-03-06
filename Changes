@@ -1,6 +1,8 @@
 Revision history for MojoX::OAuth2
 
 {{$NEXT}}
+
+0.34  2015-03-06
   - emit_safe() deprecated in Mojolicious - use emit() instead
 
 0.33  2014-08-11
