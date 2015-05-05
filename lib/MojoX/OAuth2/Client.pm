@@ -124,10 +124,10 @@ sub _emit_code_response {
 
     my $errors = $self->error;
 
-    return $self->emit('access_denied' => $errors ) 
+    return $self->emit_safe('access_denied' => $errors )
             if $errors && $errors->{error} eq 'access_denied' && $self->has_subscribers('access_denied');
-    return $self->emit('failure' => $errors) if( $errors || not $self->{code} );
-    return $self->emit('success' => $self->code );
+    return $self->emit_safe('failure' => $errors) if( $errors || not $self->{code} );
+    return $self->emit_safe('success' => $self->code );
 }
 
 #-------------------------------------------------------------------------------
@@ -138,8 +138,8 @@ sub verify_state {
     push @{$self->operations}, sub
     {
         if( ! $cb->( $self->state ) ) {
-            $self->emit('access_denied' => { error => 'forbidden',
-                                                  error_desription => "Forbidden", 
+            $self->emit_safe('access_denied' => { error => 'forbidden',
+                                                  error_desription => "Forbidden",
                                                   status => 403 } ) unless $cb->( $self->state );
             return;
         }
@@ -158,7 +158,7 @@ sub get_token {
 
     push @{$self->operations}, sub {
         # Deal with error that may have hung over from receive_code operation
-        return $self->emit('failure' => $self->error ) if $self->error;
+        return $self->emit_safe('failure' => $self->error ) if $self->error;
 
         my $params;
         my $grant_type = $args{grant_type} || 'authorization_code';
@@ -196,17 +196,17 @@ sub get_token {
 
         my $basicauth_switch = ($self->_provider->{use_basic_auth} && $self->_provider->{use_basic_auth} =~ /yes|true|1/i) ? 1 : 0;
 
-        $self->_post( url           => $token_url, 
-                      body          => $params, 
-                      basicauth     => $basicauth_switch, 
+        $self->_post( url           => $token_url,
+                      body          => $params,
+                      basicauth     => $basicauth_switch,
                       client_id     => $self->_provider->{client_id},
                       client_secret => $self->_provider->{client_secret},
                       filter        => $args{filter},
         sub {
             my( $success, $error ) = @_;
 
-            return $self->emit('failure' => $error )  if $error;
-            return $self->emit('success' => $success );
+            return $self->emit_safe('failure' => $error )  if $error;
+            return $self->emit_safe('success' => $success );
         });
     };
 
@@ -272,7 +272,7 @@ sub _post
         my $error_json   = $self->_extract_errors( $error_hash );
         my $success_json = undef;
 
-        if( !$tx->error ) 
+        if( !$tx->error )
         {
             if( $filter )
             {
@@ -353,7 +353,7 @@ MojoX::OAuth2 - Mojo::IOLoop based OAuth 2.0 implementation
         success       => sub { }
     )->execute;
 
-    # If the OAuth2 server generated authorisation_code is aquired through some other means, it must be 
+    # If the OAuth2 server generated authorisation_code is aquired through some other means, it must be
     # given to the OAuth2 client before an access_token can be requested:
     $client->code('the_authorisation_code'); # Set the authorisation code
 
@@ -451,8 +451,8 @@ returned, then the client will emit an "access_denied" hook with a 403 - forbidd
 
 =head2 get_token
 
-This method puts the client in "request access token" mode. 
-The token request is deferred until the L</execute> method is called which requires that three callback subroutines are 
+This method puts the client in "request access token" mode.
+The token request is deferred until the L</execute> method is called which requires that three callback subroutines are
 provided through the L</on> method. When L</execute> is invoked, the identity provider OAuth2 server is contacted and the
 authorisation code to access token exchange is requested, resulting in one of the callback subroutines being called.
 
@@ -463,17 +463,17 @@ as required. This is useful for mapping non-complient server responses, such as 
       # A Facebook access_token response filter.
       # The filter takes a Mojo::Message::Response and returns a proper
       # OAuth 2.0 access_token response hash.
-      
+
       $filter = sub {
-          my ($response) = @_; 
-          
+          my ($response) = @_;
+
           my $resp = Mojo::Parameters->new( $response->body );
           my $token_info = {
               access_token => $resp->param('access_token'),
               expires_in   => $resp->param('expires'),
               token_type   => 'Bearer',
           }
-          
+
           return $token_info;
       };
 
