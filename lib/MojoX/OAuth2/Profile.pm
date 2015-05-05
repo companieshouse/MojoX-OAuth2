@@ -83,10 +83,10 @@ sub fetch {
 
             $ua = $ua;
 
-            return $self->emit('failure' => $tx->error ) if $tx->error;
+            return $self->emit_safe('failure' => $tx->error ) if $tx->error;
 
             my $profile_json = $tx->success->json if $tx->success;
-            return $self->emit('success' => $profile_json );
+            return $self->emit_safe('success' => $profile_json );
         });
     };
 
@@ -129,7 +129,7 @@ MojoX::OAuth2 - Mojo::IOLoop based OAuth 2.0 implementation
         success       => sub { }
     )->execute;
 
-    # If the OAuth2 server generated authorisation_code is aquired through some other means, it must be 
+    # If the OAuth2 server generated authorisation_code is aquired through some other means, it must be
     # given to the OAuth2 client before an access_token can be requested:
     $client->code('the_authorisation_code'); # Set the authorisation code
 
@@ -212,9 +212,9 @@ Alternatively, the C<code> property of the client may be set directly, allowing 
 
 =head2 get_token
 
-This method puts the client in "request access token" mode. 
+This method puts the client in "request access token" mode.
 The token request is deferred until the L</execute> method is called which requires that three callback subroutines are provided through the L</on> method.
-When L</execute> is invoked, the identity provider OAuth2 server is contacted and the authorisation code to access token exchange is requested, 
+When L</execute> is invoked, the identity provider OAuth2 server is contacted and the authorisation code to access token exchange is requested,
 resulting in one of the callback subroutines being called.
 
 =head2 on
