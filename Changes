@@ -1,0 +1,24 @@
+Revision history for MojoX::OAuth2
+
+0.35  2015-05-05
+  - Revert to using emit_safe()
+
+0.34  2015-03-06
+  - emit_safe() deprecated in Mojolicious - use emit() instead
+
+0.33  2014-08-11
+  - Added verify_state handler
+
+0.31  2014-08-07
+  - update for Mojo 5.x
+
+0.30  2014-07-31
+  - harmonise to CHGOVUK standard
+  - Fixed undef value in pattern match
+  - Add verify_state method
+
+0.02  01-Jul-2014
+  - Implemented refresh token handling and HTTP Authentication
+
+0.01  2014-01-14
+  - first release as CPAN module
