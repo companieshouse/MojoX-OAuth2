@@ -1,2 +1,2 @@
-requires 'Mojolicious', '< 5.69';
+requires 'Mojolicious';
 test_requires 'Test::Exception';
