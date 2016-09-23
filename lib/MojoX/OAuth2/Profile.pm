@@ -83,10 +83,10 @@ sub fetch {
 
             $ua = $ua;
 
-            return $self->emit_safe('failure' => $tx->error ) if $tx->error;
+            return $self->emit('failure' => $tx->error ) if $tx->error;
 
             my $profile_json = $tx->success->json if $tx->success;
-            return $self->emit_safe('success' => $profile_json );
+            return $self->emit('success' => $profile_json );
         });
     };
 
