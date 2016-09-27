@@ -1,6 +1,6 @@
 package MojoX::OAuth2;
 
-our $VERSION = '0.35';
+our $VERSION = '0.36';
 
 use MojoX::OAuth2::Client;
 use MojoX::OAuth2::Profile;

@@ -1,6 +1,7 @@
 Revision history for MojoX::OAuth2
 
 {{$NEXT}}
+  - Remove emit_safe.  Relax Mojolicious requirement so that it can be upgraded.
 
 0.35  2015-05-05
   - Revert to using emit_safe()
